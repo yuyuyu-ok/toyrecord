@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="theme-color" content="#FBEFC0" />
+  <title>心头好</title>
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- 顶部标题栏 -->
+    <header id="topbar" class="topbar">
+      <button id="backBtn" class="back-btn" aria-label="返回">‹</button>
+      <span id="topTitle" class="top-title">心头好</span>
+    </header>
+
+    <!-- 页面容器 -->
+    <main id="view" class="view"></main>
+
+    <!-- 底部 tab -->
+    <nav id="tabbar" class="tabbar">
+      <button class="tab" data-tab="frame">
+        <span class="tab-ico">❀</span><span class="tab-txt">相框</span>
+      </button>
+      <button class="tab" data-tab="family">
+        <span class="tab-ico">♡</span><span class="tab-txt">家族</span>
+      </button>
+      <button class="tab" data-tab="mine">
+        <span class="tab-ico">☘</span><span class="tab-txt">我的</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- 隐藏的文件选择器，用于选照片 -->
+  <input type="file" id="filePicker" accept="image/*" multiple style="display:none" />
+
+  <script src="store.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
