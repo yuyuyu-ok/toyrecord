@@ -1,5 +1,6 @@
 /* 心头好 · 网页版主逻辑（单页应用）
-   依赖 store.js 暴露的 Store / DateUtil / Img */
+   依赖 supabase.js / store.js 暴露的 supabase / Store / DateUtil / Img */
+
 (function () {
   'use strict';
 
@@ -28,7 +29,7 @@
 
   function go(name, params) {
     if (TABS.indexOf(name) >= 0) {
-      stack = [{ name: name, params: params || {} }]; // tab 切换重置栈
+      stack = [{ name: name, params: params || {} }];
     } else {
       stack.push({ name: name, params: params || {} });
     }
@@ -72,10 +73,25 @@
   }
 
   /* ============ 渲染总控 ============ */
-  function render() {
+  async function render() {
     var c = current();
+
+    // —— 鉴权：未登录 + 不是登录页 → 强制跳登录页 ——
+    if (!Store.isLoggedIn() && c.name !== 'login') {
+      stack = [{ name: 'login', params: {} }];
+    }
+    c = current();
+
+    if (c.name === 'login') {
+      renderLogin();
+      topbar.style.display = 'none';
+      tabbar.style.display = 'none';
+      document.body.classList.remove('has-tab');
+      return;
+    }
+
+    topbar.style.display = 'flex';
     var isTab = TABS.indexOf(c.name) >= 0;
-    // 顶栏：tab 页不显示返回
     backBtn.style.visibility = isTab ? 'hidden' : 'visible';
     tabbar.style.display = isTab ? 'flex' : 'none';
     document.body.classList.toggle('has-tab', isTab);
@@ -84,19 +100,111 @@
       frame: renderFrame, world: renderWorld, family: renderFamily, mine: renderMine,
       'doll-edit': renderDollEdit, 'memory-edit': renderMemoryEdit, 'memory-detail': renderMemoryDetail
     };
-    (map[c.name] || renderFrame)(c.params);
+    await (map[c.name] || renderFrame)(c.params);
 
-    // 高亮当前 tab
     Array.prototype.forEach.call(tabbar.querySelectorAll('.tab'), function (b) {
       b.classList.toggle('on', b.dataset.tab === c.name);
     });
     view.scrollTop = 0;
   }
 
-  /* ============ 相框首页 ============ */
-  function renderFrame() {
+  /* ============ 登录 / 注册 ============ */
+  function renderLogin() {
     topTitle.textContent = '心头好';
-    var dolls = Store.getDolls().map(function (d) {
+    var mode = draft.__authMode || 'login'; // 'login' | 'register'
+    var err = draft.__authError || '';
+    var emailVal = esc(draft.__authEmail || '');
+
+    view.innerHTML =
+      '<div class="page auth-page">' +
+        '<div class="auth-card">' +
+          '<div class="auth-logo">' + '♡' + '</div>' +
+          '<div class="auth-brand">心头好</div>' +
+          '<div class="auth-sub">把珍惜好好收起来</div>' +
+          '<div class="auth-field"><input class="auth-input" id="authEmail" type="email" placeholder="邮箱" value="' + emailVal + '" autocomplete="email" /></div>' +
+          '<div class="auth-field"><input class="auth-input" id="authPwd" type="password" placeholder="密码（至少 6 位）" autocomplete="' + (mode === 'login' ? 'current-password' : 'new-password') + '" /></div>' +
+          (mode === 'register' ? '<div class="auth-field"><input class="auth-input" id="authPwd2" type="password" placeholder="再输一遍密码" /></div>' : '') +
+          (err ? '<div class="auth-error">' + esc(err) + '</div>' : '') +
+          '<button class="auth-btn" id="authSubmit">' + (mode === 'login' ? '登录' : '注册') + '</button>' +
+          '<div class="auth-switch">' +
+            (mode === 'login'
+              ? '还没有账号？<span class="auth-link" id="authToggle">去注册</span>'
+              : '已有账号？<span class="auth-link" id="authToggle">去登录</span>') +
+          '</div>' +
+        '</div>' +
+        '<div class="auth-foot faint">本地数据不会自动迁移到账号<br/>注册即代表新开始</div>' +
+      '</div>';
+
+    var emailEl = view.querySelector('#authEmail');
+    var pwdEl = view.querySelector('#authPwd');
+
+    view.querySelector('#authToggle').onclick = function () {
+      draft.__authMode = mode === 'login' ? 'register' : 'login';
+      draft.__authEmail = emailEl ? emailEl.value : '';
+      draft.__authError = '';
+      renderLogin();
+      setTimeout(function () {
+        var e = view.querySelector('#authEmail');
+        if (e) e.focus();
+      }, 0);
+    };
+
+    view.querySelector('#authSubmit').onclick = async function () {
+      var email = (emailEl.value || '').trim();
+      var pwd = pwdEl.value || '';
+      draft.__authEmail = email;
+
+      // 校验
+      if (!email) { draft.__authError = '请输入邮箱'; renderLogin(); return; }
+      if (email.indexOf('@') < 0) { draft.__authError = '邮箱格式不对哦'; renderLogin(); return; }
+      if (pwd.length < 6) { draft.__authError = '密码至少 6 位'; renderLogin(); return; }
+
+      if (mode === 'register') {
+        var pwd2 = (view.querySelector('#authPwd2') || {}).value || '';
+        if (pwd !== pwd2) { draft.__authError = '两次密码不一致'; renderLogin(); return; }
+      }
+
+      showToast(mode === 'login' ? '登录中…' : '注册中…');
+
+      var result;
+      if (mode === 'login') {
+        result = await Store.signIn(email, pwd);
+      } else {
+        result = await Store.signUp(email, pwd);
+      }
+
+      if (result.error) {
+        draft.__authError = result.error;
+        draft.__authMode = mode;
+        renderLogin();
+        return;
+      }
+
+      // 成功
+      draft.__authMode = null;
+      draft.__authError = null;
+      draft.__authEmail = null;
+      showToast('欢迎回来');
+      go('frame', {});
+    };
+
+    // 回车提交
+    var onKey = function (e) {
+      if (e.key === 'Enter') view.querySelector('#authSubmit').click();
+    };
+    if (emailEl) emailEl.onkeydown = onKey;
+    if (pwdEl) pwdEl.onkeydown = onKey;
+    var pwd2El = view.querySelector('#authPwd2');
+    if (pwd2El) pwd2El.onkeydown = onKey;
+
+    if (emailEl) setTimeout(function () { emailEl.focus(); }, 100);
+  }
+
+  /* ============ 相框首页 ============ */
+  async function renderFrame() {
+    topTitle.textContent = '心头好';
+    var rawDolls = await Store.getDolls();
+    var dolls = rawDolls.map(function (d) {
       return {
         id: d.id, name: d.name, coverPhoto: d.coverPhoto,
         daysText: d.homeDate ? '来家第 ' + DateUtil.daysTogether(d.homeDate) + ' 天' : ''
@@ -119,7 +227,7 @@
       return;
     }
 
-    var activeId = Store.getActiveDollId();
+    var activeId = await Store.getActiveDollId();
     var idx = dolls.findIndex(function (d) { return d.id === activeId; });
     if (idx < 0) idx = 0;
 
@@ -146,20 +254,17 @@
       '</div>';
 
     var track = document.getElementById('frameTrack');
-    // 定位到当前主角
     requestAnimationFrame(function () {
       var slide = track.children[idx];
       if (slide) track.scrollLeft = slide.offsetLeft - (track.clientWidth - slide.clientWidth) / 2;
     });
 
-    // 点击进入世界
     Array.prototype.forEach.call(track.children, function (el) {
       el.querySelector('.frame').onclick = function () {
         go('world', { id: el.dataset.id });
       };
     });
 
-    // 滚动时更新名字/天数 + 记录主角
     var scrollTimer = null;
     track.onscroll = function () {
       clearTimeout(scrollTimer);
@@ -195,8 +300,9 @@
   }
 
   /* ============ 它的世界 ============ */
-  function renderWorld(params) {
-    var doll = Store.getDoll(params.id || Store.getActiveDollId());
+  async function renderWorld(params) {
+    var dollId = params.id || (await Store.getActiveDollId());
+    var doll = await Store.getDoll(dollId);
     if (!doll) { showToast('它不见了'); back(); return; }
     topTitle.textContent = doll.name || '它的世界';
 
@@ -205,10 +311,12 @@
     var specsList = Object.keys(specs).filter(function (k) { return specs[k]; })
       .map(function (k) { return { label: k, value: specs[k] }; });
 
+    var rawMoods = await Store.getMoods();
     var moodMap = {};
-    Store.getMoods().forEach(function (m) { moodMap[m.id] = m.label; });
+    rawMoods.forEach(function (m) { moodMap[m.id] = m.label; });
 
-    var memories = Store.getMemories(doll.id).map(function (m) {
+    var rawMemories = await Store.getMemories(doll.id);
+    var memories = rawMemories.map(function (m) {
       return {
         id: m.id, cover: (m.photos && m.photos[0]) || '', photoCount: (m.photos || []).length,
         text: m.text, dateText: DateUtil.friendlyDate(m.date),
@@ -282,16 +390,21 @@
   }
 
   /* ============ 家族 ============ */
-  function renderFamily() {
+  async function renderFamily() {
     topTitle.textContent = '家族';
-    var activeId = Store.getActiveDollId();
-    var dolls = Store.getDolls().map(function (d) {
-      return {
+    var activeId = await Store.getActiveDollId();
+    var rawDolls = await Store.getDolls();
+
+    var dolls = [];
+    for (var i = 0; i < rawDolls.length; i++) {
+      var d = rawDolls[i];
+      var memCount = await Store.countMemories(d.id);
+      dolls.push({
         id: d.id, name: d.name, coverPhoto: d.coverPhoto,
         daysText: d.homeDate ? '第 ' + DateUtil.daysTogether(d.homeDate) + ' 天' : '',
-        memCount: Store.countMemories(d.id)
-      };
-    });
+        memCount: memCount
+      });
+    }
 
     if (!dolls.length) {
       view.innerHTML = '<div class="page family-page"><div class="empty">' +
@@ -339,11 +452,13 @@
   }
 
   /* ============ 我的 ============ */
-  function renderMine() {
+  async function renderMine() {
     topTitle.textContent = '我的';
-    var dolls = Store.getDolls();
+    var rawDolls = await Store.getDolls();
     var memCount = 0;
-    dolls.forEach(function (d) { memCount += Store.countMemories(d.id); });
+    for (var i = 0; i < rawDolls.length; i++) {
+      memCount += await Store.countMemories(rawDolls[i].id);
+    }
     var soon = [
       ['🖼', '导出分享', '把档案卡、时间线做成精美图片发出去'],
       ['🔔', '纪念日提醒', '生日、来家纪念日到了轻轻提醒你'],
@@ -357,42 +472,59 @@
         '<div class="soon-desc faint">' + s[2] + '</div></div><span class="soon-flag">soon</span></div>';
     }).join('');
 
+    var userEmail = Store.user ? esc(Store.user.email) : '';
+
     view.innerHTML =
       '<div class="page mine-page">' +
         '<div class="mine-head"><div class="mine-slogan">你是我心头最软的地方</div>' +
           '<div class="mine-stat">' +
-            '<div class="stat-item"><span class="stat-num">' + dolls.length + '</span><span class="stat-label faint">个心头好</span></div>' +
+            '<div class="stat-item"><span class="stat-num">' + rawDolls.length + '</span><span class="stat-label faint">个心头好</span></div>' +
             '<div class="stat-divider"></div>' +
             '<div class="stat-item"><span class="stat-num">' + memCount + '</span><span class="stat-label faint">个瞬间</span></div>' +
           '</div></div>' +
+        (userEmail ? '<div class="mine-user"><span class="mine-user-icon">📧</span><span class="mine-user-email">' + userEmail + '</span></div>' : '') +
         '<div class="soon-title muted">正在慢慢做，敬请期待</div>' +
         '<div class="soon-list">' + soonHtml + '</div>' +
+        '<button class="btn-ghost logout-btn" id="btnLogout">退出登录</button>' +
         '<div class="mine-foot faint">心头好 · 把珍惜好好收起来</div>' +
         '<div class="bottom-safe"></div>' +
       '</div>';
+
+    var logoutBtn = view.querySelector('#btnLogout');
+    if (logoutBtn) logoutBtn.onclick = async function () {
+      if (confirm('确定退出登录吗？\n你的数据都在云端，下次登录还会在。')) {
+        await Store.signOut();
+        showToast('已退出');
+        go('frame', {});
+      }
+    };
   }
 
   /* ============ 建娃 / 编辑 ============ */
   function openDollEdit(id) {
     var GEN = ['不设定', '男孩子', '女孩子', '其他'];
     if (id) {
-      var d = Store.getDoll(id);
-      var sp = d.specs || {};
-      draft = {
-        id: d.id, isEdit: true, coverPhoto: d.coverPhoto || '', name: d.name || '',
-        nickname: d.nickname || '', homeDate: d.homeDate || DateUtil.today(), birthday: d.birthday || '',
-        gender: d.gender || '不设定', personality: (d.personality || []).slice(), meetStory: d.meetStory || '',
-        specSeries: sp['社/系列'] || '', specBody: sp['体型'] || '', specAccessory: sp['配件'] || ''
-      };
+      Store.getDoll(id).then(function (d) {
+        if (!d) return;
+        var sp = d.specs || {};
+        draft = {
+          id: d.id, isEdit: true, coverPhoto: d.coverPhoto || '', name: d.name || '',
+          nickname: d.nickname || '', homeDate: d.homeDate || DateUtil.today(), birthday: d.birthday || '',
+          gender: d.gender || '不设定', personality: (d.personality || []).slice(), meetStory: d.meetStory || '',
+          specSeries: sp['社/系列'] || '', specBody: sp['体型'] || '', specAccessory: sp['配件'] || ''
+        };
+        draft.GEN = GEN;
+        go('doll-edit', {});
+      });
     } else {
       draft = {
         isEdit: false, coverPhoto: '', name: '', nickname: '', homeDate: DateUtil.today(),
         birthday: '', gender: '不设定', personality: [], meetStory: '',
         specSeries: '', specBody: '', specAccessory: ''
       };
+      draft.GEN = GEN;
+      go('doll-edit', {});
     }
-    draft.GEN = GEN;
-    go('doll-edit', {});
   }
 
   function renderDollEdit() {
@@ -433,7 +565,6 @@
         '<div class="bottom-safe"></div>' +
       '</div>';
 
-    // 同步输入到 draft
     bindInput('f_name', 'name'); bindInput('f_nick', 'nickname');
     bindInput('f_home', 'homeDate'); bindInput('f_birth', 'birthday');
     bindInput('f_story', 'meetStory'); bindInput('f_series', 'specSeries');
@@ -476,7 +607,7 @@
     if (el) el.oninput = function () { draft[key] = this.value; };
   }
 
-  function saveDoll() {
+  async function saveDoll() {
     var name = (draft.name || '').trim();
     if (!name) { showToast('先给它起个名字吧'); return; }
     if (!draft.coverPhoto) { showToast('挑一张它的照片吧'); return; }
@@ -492,10 +623,10 @@
       personality: draft.personality, meetStory: (draft.meetStory || '').trim(), specs: specs
     };
     if (draft.isEdit) {
-      Store.updateDoll(draft.id, payload);
+      await Store.updateDoll(draft.id, payload);
     } else {
-      var nd = Store.addDoll(payload);
-      Store.setActiveDollId(nd.id);
+      var nd = await Store.addDoll(payload);
+      if (nd) await Store.setActiveDollId(nd.id);
     }
     showToast('存好了');
     back();
@@ -505,10 +636,15 @@
   function renderMemoryEdit(params) {
     topTitle.textContent = '记一条';
     if (!draft.__mem) {
-      draft.__mem = { dollId: params.dollId || Store.getActiveDollId(), photos: [], text: '', date: DateUtil.today(), moodId: '' };
+      draft.__mem = { dollId: params.dollId || '', photos: [], text: '', date: DateUtil.today(), moodId: '' };
     }
     var m = draft.__mem;
-    var moods = Store.getMoods();
+    Store.getMoods().then(function (moods) {
+      renderMemoryEditContent(params, m, moods);
+    });
+  }
+
+  function renderMemoryEditContent(params, m, moods) {
     var photoItems = m.photos.map(function (p, i) {
       return '<div class="photo-item"><img class="photo-img" src="' + p + '" data-i="' + i + '" />' +
         '<span class="photo-del" data-del="' + i + '">×</span></div>';
@@ -547,10 +683,10 @@
       el.onclick = function () { m.moodId = (m.moodId === el.dataset.mood) ? '' : el.dataset.mood; renderMemoryEdit(params); };
     });
     view.querySelector('#newMood').onclick = function () { openMoodPanel(params); };
-    view.querySelector('#saveMem').onclick = function () {
+    view.querySelector('#saveMem').onclick = async function () {
       var text = (m.text || '').trim();
       if (!m.photos.length && !text) { showToast('写点什么，或加张照片'); return; }
-      var saved = Store.addMemory({ dollId: m.dollId, photos: m.photos, text: text, date: m.date, moodId: m.moodId });
+      var saved = await Store.addMemory({ dollId: m.dollId, photos: m.photos, text: text, date: m.date, moodId: m.moodId });
       if (!saved) return;
       draft.__mem = null;
       showToast('记下了');
@@ -587,10 +723,10 @@
       };
     });
     mask.querySelector('#mpCancel').onclick = function () { document.body.removeChild(mask); };
-    mask.querySelector('#mpOk').onclick = function () {
+    mask.querySelector('#mpOk').onclick = async function () {
       var label = (input.value || '').trim();
       if (!label) { showToast('写一个心情词吧'); return; }
-      var mood = Store.addMood(label, picked);
+      var mood = await Store.addMood(label, picked);
       draft.__mem.moodId = mood.id;
       document.body.removeChild(mask);
       renderMemoryEdit(params);
@@ -598,12 +734,15 @@
   }
 
   /* ============ 回忆详情 ============ */
-  function renderMemoryDetail(params) {
+  async function renderMemoryDetail(params) {
     topTitle.textContent = '这一刻';
-    var mem = Store.getMemory(params.id);
+    var mem = await Store.getMemory(params.id);
     if (!mem) { showToast('这条不见了'); back(); return; }
     var moodLabel = '';
-    if (mem.moodId) { var mo = Store.getMood(mem.moodId); moodLabel = mo ? mo.label : ''; }
+    if (mem.moodId) {
+      var mo = await Store.getMood(mem.moodId);
+      moodLabel = mo ? mo.label : '';
+    }
     var photos = (mem.photos || []).map(function (p, i) {
       return '<img class="detail-photo" src="' + p + '" data-i="' + i + '" />';
     }).join('');
@@ -640,8 +779,10 @@
   Array.prototype.forEach.call(tabbar.querySelectorAll('.tab'), function (b) {
     b.onclick = function () { go(b.dataset.tab, {}); };
   });
-  // 安卓返回键 / 浏览器后退
   window.addEventListener('popstate', function () { if (stack.length > 1) back(); });
 
-  render();
+  // —— 启动：先检查登录状态，再渲染 ——
+  Store.init().then(function () {
+    render();
+  });
 })();

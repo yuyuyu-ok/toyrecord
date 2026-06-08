@@ -383,3 +383,81 @@ select.field-input { text-align: right; }
   font-size: 14px; z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.2s;
 }
 .toast.show { opacity: 1; }
+
+/* ============ 登录 / 注册 ============ */
+.auth-page {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 100vh; padding: 40px 20px;
+  background: linear-gradient(170deg, #FDF7DD 0%, #FFFCF5 40%, #F5EEE0 100%);
+}
+.auth-card {
+  width: 100%; max-width: 340px;
+  background: var(--cream-card);
+  border-radius: 24px;
+  padding: 36px 28px 28px;
+  box-shadow: 0 10px 32px rgba(124,158,74,0.1);
+  text-align: center;
+}
+.auth-logo {
+  font-size: 48px; color: var(--peach); line-height: 1;
+  margin-bottom: 4px;
+}
+.auth-brand {
+  font-size: 24px; font-weight: 600; letter-spacing: 2px;
+  color: var(--ink); margin-bottom: 4px;
+}
+.auth-sub {
+  font-size: 13px; color: var(--ink-soft);
+  margin-bottom: 28px;
+}
+.auth-field { margin-bottom: 14px; }
+.auth-input {
+  width: 100%;
+  background: rgba(251,239,192,0.3);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 13px 16px;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.auth-input:focus { border-color: var(--grass); }
+.auth-error {
+  background: rgba(217,123,67,0.08);
+  color: var(--apricot-deep);
+  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+.auth-btn {
+  display: block; width: 100%;
+  background: linear-gradient(135deg, #EE9A63, #E8915B);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  font-size: 16px;
+  padding: 13px 0;
+  margin-top: 18px;
+  box-shadow: 0 6px 14px rgba(232,145,91,0.28);
+  cursor: pointer;
+}
+.auth-btn:active { background: linear-gradient(135deg, #D97B43, #D97B43); }
+.auth-switch { margin-top: 18px; font-size: 14px; color: var(--ink-soft); }
+.auth-link { color: var(--apricot); cursor: pointer; }
+.auth-foot {
+  text-align: center; font-size: 12px; margin-top: 24px; line-height: 1.8;
+}
+
+/* ============ 我的 - 用户信息 ============ */
+.mine-user {
+  display: flex; align-items: center; justify-content: center;
+  padding: 8px 0; margin-bottom: 4px;
+}
+.mine-user-icon { font-size: 15px; margin-right: 6px; }
+.mine-user-email { font-size: 13px; color: var(--ink-soft); }
+.logout-btn {
+  display: block; width: 180px; margin: 20px auto 0;
+  color: var(--ink-faint) !important;
+  border-color: var(--line) !important;
+}
