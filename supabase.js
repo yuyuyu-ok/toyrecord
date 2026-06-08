@@ -1,4 +1,4 @@
-const SUPABASE_URL = 'YOUR_SUPABASE_URL';            // 替换为你的 Project URL
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';  // 替换为你的 anon key
+const SUPABASE_URL = 'https://ogqrlgfwsdsnfnddzwcr.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ncXJsZ2Z3c2RzbmZuZGR6d2NyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MDExMTcsImV4cCI6MjA5NjQ3NzExN30.4UXHec58Ls0uBEd2Y0IFy0gi44xY6gW03SLywl0C0OE';
 
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
